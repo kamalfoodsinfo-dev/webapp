@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Store</title>
+<meta name="description" content="Order online with cash on delivery.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f8f5;--ink:#1c2a25;--muted:#5d6a64;--line:#dbe1dc;--card:#fff;--accent:#1f6f5c;--accent-ink:#fff}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;padding:14px max(20px,5vw)}
+.brand{font-weight:800;font-size:1.25rem;letter-spacing:-.01em}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:10px 18px;font-weight:600}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.intro{padding:56px max(20px,5vw) 24px;max-width:900px}
+.intro h1{font-size:clamp(2rem,6vw,3.4rem);line-height:1.08;letter-spacing:-.03em;font-weight:800;margin:0 0 12px}
+.intro p{color:var(--muted);margin:0;max-width:52ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:24px;padding:24px max(20px,5vw) 64px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.pic{aspect-ratio:4/3;background:#dfe9e3;display:grid;place-items:center;font-size:3rem;font-weight:800;color:var(--accent)}
+.pic img{width:100%;height:100%;object-fit:cover;display:block}
+.info{padding:16px;display:flex;flex-direction:column;gap:6px;flex:1}
+.info h2{font-size:1.1rem;margin:0}
+.info p{margin:0;color:var(--muted);font-size:.95rem;flex:1}
+.price{font-weight:800;font-size:1.1rem}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
+footer{border-top:1px solid var(--line);padding:24px max(20px,5vw);color:var(--muted);font-size:.9rem}
+#veil{position:fixed;inset:0;background:rgba(20,30,26,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+#cart{position:fixed;top:0;right:0;height:100%;width:min(420px,100%);background:var(--card);z-index:10;transform:translateX(100%);transition:transform .25s;display:flex;flex-direction:column;border-left:1px solid var(--line)}
+body.open #cart{transform:none}
+body.open #veil{opacity:1;pointer-events:auto}
+.chead{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.chead h2{margin:0;font-size:1.15rem}
+.lines{flex:1;overflow:auto;padding:8px 20px}
+.line{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.qty{display:flex;align-items:center;gap:8px}
+.qty button{width:28px;height:28px;border:1px solid var(--line);background:#fff;border-radius:6px}
+.empty{color:var(--muted);padding:24px 0}
+form{padding:16px 20px;border-top:1px solid var(--line);display:grid;gap:10px}
+label{font-size:.85rem;font-weight:600;display:grid;gap:4px}
+input,textarea{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;width:100%}
+.total{display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem}
+.note{font-size:.85rem;color:var(--muted);margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand" id="brand"></div>
+  <button class="btn" id="open-cart" aria-label="Open cart">Cart (<span id="count">0</span>)</button>
+</header>
+
+<main>
+  <section class="intro">
+    <h1 id="headline"></h1>
+    <p id="tagline"></p>
+  </section>
+  <section class="grid" id="grid" aria-label="Products"></section>
+</main>
+
+<footer id="foot"></footer>
+
+<div id="veil"></div>
+<aside id="cart" aria-label="Shopping cart">
+  <div class="chead"><h2>Your cart</h2><button class="btn ghost" id="close-cart">Close</button></div>
+  <div class="lines" id="lines"></div>
+  <form id="checkout">
+    <div class="total"><span>Total</span><span id="total"></span></div>
+    <label>Full name<input name="name" required autocomplete="name"></label>
+    <label>Phone number<input name="phone" type="tel" required autocomplete="tel"></label>
+    <label>Delivery address<textarea name="address" rows="2" required autocomplete="street-address"></textarea></label>
+    <button class="btn" type="submit">Place order</button>
+    <p class="note">Pay cash on delivery. Your order opens in WhatsApp so you can send it to us.</p>
+  </form>
+</aside>
+
+<script>
+/* ============ EDIT THIS SECTION ============ */
+const STORE = {
+  name: "Kamal Foods",
+  tagline: "Organic ingredients at your doorstep",
+  whatsapp: "923333237879",   // country code + number, no + or spaces
+  currency: "pkr"
+};
+
+// To add a product: copy one block, give it a new unique id, then save.
+// "image" can be a link or a file path like "images/shirt.jpg". Leave "" for none.
+const PRODUCTS = [
+  { id: 1, name: "Product One", price: 1500, desc: "A short description of the first product.", image: "" },
+  { id: 2, name: "Product Two", price: 2500, desc: "A short description of the second product.", image: "" }
+];
+/* ============ END OF EDIT SECTION ============ */
+
+const $ = id => document.getElementById(id);
+const money = n => STORE.currency + " " + n.toLocaleString("en-US");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let cart = {};
+try { cart = JSON.parse(localStorage.getItem("cart") || "{}"); } catch (e) { cart = {}; }
+const save = () => { try { localStorage.setItem("cart", JSON.stringify(cart)); } catch (e) {} };
+
+document.title = STORE.name;
+$("brand").textContent = STORE.name;
+$("headline").textContent = STORE.name;
+$("tagline").textContent = STORE.tagline;
+$("foot").textContent = "© " + new Date().getFullYear() + " " + STORE.name + ". All rights reserved.";
+
+$("grid").innerHTML = PRODUCTS.map(p => `
+  <article class="item">
+    <div class="pic">${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy">` : esc(p.name.charAt(0))}</div>
+    <div class="info">
+      <h2>${esc(p.name)}</h2>
+      <p>${esc(p.desc)}</p>
+      <div class="row"><span class="price">${money(p.price)}</span>
+      <button class="btn" data-add="${p.id}">Add to cart</button></div>
+    </div>
+  </article>`).join("");
+
+function render() {
+  const ids = Object.keys(cart).filter(id => PRODUCTS.some(p => p.id == id));
+  let total = 0, count = 0;
+  $("lines").innerHTML = ids.length ? ids.map(id => {
+    const p = PRODUCTS.find(x => x.id == id), q = cart[id];
+    total += p.price * q; count += q;
+    return `<div class="line"><strong>${esc(p.name)}</strong><span>${money(p.price * q)}</span>
+      <div class="qty"><button data-dec="${id}" aria-label="Remove one">−</button><span>${q}</span><button data-inc="${id}" aria-label="Add one">+</button></div>
+      <button class="btn ghost" data-del="${id}" style="justify-self:end;padding:4px 10px">Remove</button></div>`;
+  }).join("") : `<p class="empty">Your cart is empty. Add a product to get started.</p>`;
+  $("total").textContent = money(total);
+  $("count").textContent = count;
+  $("checkout").style.display = ids.length ? "grid" : "none";
+}
+
+const toggle = open => document.body.classList.toggle("open", open);
+$("open-cart").onclick = () => toggle(true);
+$("close-cart").onclick = $("veil").onclick = () => toggle(false);
+document.addEventListener("keydown", e => { if (e.key === "Escape") toggle(false); });
+
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.dataset.add) { cart[t.dataset.add] = (cart[t.dataset.add] || 0) + 1; toggle(true); }
+  else if (t.dataset.inc) cart[t.dataset.inc]++;
+  else if (t.dataset.dec) { if (--cart[t.dataset.dec] <= 0) delete cart[t.dataset.dec]; }
+  else if (t.dataset.del) delete cart[t.dataset.del];
+  else return;
+  save(); render();
+});
+
+$("checkout").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  let total = 0;
+  const lines = Object.keys(cart).map(id => {
+    const p = PRODUCTS.find(x => x.id == id); if (!p) return "";
+    total += p.price * cart[id];
+    return `- ${p.name} x ${cart[id]} = ${money(p.price * cart[id])}`;
+  }).filter(Boolean);
+  const msg = `New order from ${STORE.name}\n\n${lines.join("\n")}\n\nTotal: ${money(total)} (cash on delivery)\n\nName: ${f.get("name")}\nPhone: ${f.get("phone")}\nAddress: ${f.get("address")}`;
+  window.open("https://wa.me/" + STORE.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
+  cart = {}; save(); render(); toggle(false);
+});
+
+render();
+</script>
+</body>
+</html>
