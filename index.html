@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f6f8f5;--ink:#1c2a25;--muted:#5d6a64;--line:#dbe1dc;--card:#fff;--accent:#1f6f5c;--accent-ink:#fff}
+:root{--bg:#f6f8f5;--ink:#1c2a25;--muted:#5d6a64;--line:#dbe1dc;--card:#fff;--accent:#1f6f5c;--accent-ink:#fff;--error:#b3261e}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.55 Manrope,system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -44,11 +44,14 @@ body.open #veil{opacity:1;pointer-events:auto}
 .qty{display:flex;align-items:center;gap:8px}
 .qty button{width:28px;height:28px;border:1px solid var(--line);background:#fff;border-radius:6px}
 .empty{color:var(--muted);padding:24px 0}
-form{padding:16px 20px;border-top:1px solid var(--line);display:grid;gap:10px}
+form{padding:16px 20px;border-top:1px solid var(--line);display:grid;gap:10px;max-height:60vh;overflow:auto}
 label{font-size:.85rem;font-weight:600;display:grid;gap:4px}
 input,textarea{font:inherit;padding:9px 10px;border:1px solid var(--line);border-radius:8px;width:100%}
+input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--error)}
 .total{display:flex;justify-content:space-between;font-weight:800;font-size:1.1rem}
 .note{font-size:.85rem;color:var(--muted);margin:0}
+.err{font-size:.85rem;color:var(--error);margin:0;min-height:0}
+.err:empty{display:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
@@ -73,11 +76,22 @@ input,textarea{font:inherit;padding:9px 10px;border:1px solid var(--line);border
 <aside id="cart" aria-label="Shopping cart">
   <div class="chead"><h2>Your cart</h2><button class="btn ghost" id="close-cart">Close</button></div>
   <div class="lines" id="lines"></div>
-  <form id="checkout">
+  <form id="checkout" novalidate>
     <div class="total"><span>Total</span><span id="total"></span></div>
-    <label>Full name<input name="name" required autocomplete="name"></label>
-    <label>Phone number<input name="phone" type="tel" required autocomplete="tel"></label>
-    <label>Delivery address<textarea name="address" rows="2" required autocomplete="street-address"></textarea></label>
+    <label>Full name
+      <input name="name" required maxlength="60" autocomplete="name">
+    </label>
+    <label>Phone number
+      <input name="phone" type="tel" inputmode="numeric" required maxlength="16" placeholder="03001234567" autocomplete="tel">
+    </label>
+    <label>City
+      <input name="city" required maxlength="40" placeholder="e.g. Karachi" autocomplete="address-level2">
+    </label>
+    <label>Delivery address
+      <textarea name="address" rows="2" required maxlength="200" placeholder="House / flat no., street, area" autocomplete="street-address"></textarea>
+    </label>
+    <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+    <p class="err" id="err" role="alert"></p>
     <button class="btn" type="submit">Place order</button>
     <p class="note">Pay cash on delivery. Your order opens in WhatsApp so you can send it to us.</p>
   </form>
@@ -89,7 +103,8 @@ const STORE = {
   name: "Kamal Foods",
   tagline: "Organic ingredients at your doorstep",
   whatsapp: "923333237879",   // country code + number, no + or spaces
-  currency: "pkr"
+  currency: "pkr",
+  emailKey: "f2aeb9bb-25f0-4e97-9c98-3a771081abc0"                // Leave "" to turn email off
 };
 
 // To add a product: copy one block, give it a new unique id, then save.
@@ -155,18 +170,85 @@ document.addEventListener("click", e => {
   save(); render();
 });
 
-$("checkout").addEventListener("submit", e => {
+/* ---------- Checkout validation ---------- */
+const form = $("checkout");
+
+// Phone: only digits, +, spaces and dashes can be typed
+form.elements.phone.addEventListener("input", e => {
+  e.target.value = e.target.value.replace(/[^\d+\s-]/g, "");
+});
+
+// Accepts 03001234567, 0300-1234567, +92 300 1234567, 923001234567.
+// Returns the number as 03XXXXXXXXX, or null if it isn't a valid Pakistani mobile number.
+function cleanPhone(v) {
+  let d = v.replace(/[\s-]/g, "");
+  if (d.startsWith("+")) d = d.slice(1);
+  if (d.startsWith("92")) d = "0" + d.slice(2);
+  return /^03\d{9}$/.test(d) ? d : null;
+}
+
+// City: letters (English or Urdu), spaces, dots, hyphens, apostrophes; 2-40 characters
+const cityOk = v => /^[A-Za-z\u0600-\u06FF][A-Za-z\u0600-\u06FF .'-]{1,39}$/.test(v);
+
+function fail(field, message) {
+  form.querySelectorAll("[aria-invalid]").forEach(el => el.removeAttribute("aria-invalid"));
+  field.setAttribute("aria-invalid", "true");
+  $("err").textContent = message;
+  field.focus();
+}
+
+form.addEventListener("input", e => {
+  e.target.removeAttribute("aria-invalid");
+  $("err").textContent = "";
+});
+
+form.addEventListener("submit", e => {
   e.preventDefault();
-  const f = new FormData(e.target);
+  const f = new FormData(form);
+  const name = String(f.get("name")).trim();
+  const phone = cleanPhone(String(f.get("phone")));
+  const city = String(f.get("city")).trim();
+  const address = String(f.get("address")).trim();
+
+  if (name.length < 2) return fail(form.elements.name, "Please enter your full name.");
+  if (!phone) return fail(form.elements.phone, "Enter a valid mobile number with digits only, like 03001234567.");
+  if (!cityOk(city)) return fail(form.elements.city, "Please enter your city (letters only).");
+  if (address.length < 8) return fail(form.elements.address, "Please enter your full delivery address (house, street, area).");
+
   let total = 0;
   const lines = Object.keys(cart).map(id => {
     const p = PRODUCTS.find(x => x.id == id); if (!p) return "";
     total += p.price * cart[id];
     return `- ${p.name} x ${cart[id]} = ${money(p.price * cart[id])}`;
   }).filter(Boolean);
-  const msg = `New order from ${STORE.name}\n\n${lines.join("\n")}\n\nTotal: ${money(total)} (cash on delivery)\n\nName: ${f.get("name")}\nPhone: ${f.get("phone")}\nAddress: ${f.get("address")}`;
+  if (!lines.length) return fail(form.elements.name, "Your cart is empty.");
+
+  const msg = `New order from ${STORE.name}\n\n${lines.join("\n")}\n\nTotal: ${money(total)} (cash on delivery)\n\nName: ${name}\nPhone: ${phone}\nCity: ${city}\nAddress: ${address}`;
+  // Open WhatsApp first (must happen directly from the click so browsers don't block it)
   window.open("https://wa.me/" + STORE.whatsapp + "?text=" + encodeURIComponent(msg), "_blank");
-  cart = {}; save(); render(); toggle(false);
+
+  // Then email the same order to the owner automatically (skipped if the hidden spam field is filled)
+  if (STORE.emailKey && !String(f.get("website"))) {
+    fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        access_key: STORE.emailKey,
+        subject: "New order from " + STORE.name + " - " + name,
+        from_name: STORE.name + " Website",
+        replyto: "",
+        Name: name,
+        Phone: phone,
+        City: city,
+        Address: address,
+        Items: lines.join("\n"),
+        Total: money(total) + " (cash on delivery)"
+      }),
+      keepalive: true
+    }).catch(() => {});
+  }
+
+  cart = {}; save(); render(); toggle(false); form.reset();
 });
 
 render();
